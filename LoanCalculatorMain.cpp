@@ -1,5 +1,4 @@
-
-#include <stdlib.h>
+#include<stdlib.h>
 
 #include <exception>
 #include <iostream>
@@ -11,19 +10,22 @@
 #include <LoanCalcQtMainWindow.h>
 #include <CmdLineParser.h>
 #include <LoanCalculator.h>
+#include "Utils.h"
 
 using namespace std;
 
+/// Types of calculations we can do
 enum CALC_TYPE
 {
-  CALC_UNKNOWN=0,
-  CALC_BALANCE=100,
-  CALC_PAYMENT,
-  CALC_NUMPAYMENTS,
-  CALC_AMOUNT,
-  CALC_INTEREST
+  CALC_UNKNOWN=0,    ///< Unknown calculation type
+  CALC_BALANCE=100,  ///< Calculate remaining loan balance
+  CALC_PAYMENT,      ///< Calculate monthly payment
+  CALC_NUMPAYMENTS,  ///< Calculate number of payments
+  CALC_AMOUNT,       ///< Calculate initial loan amount
+  CALC_INTEREST      ///< Calculate yearly interest rate
 };
 
+// Command line options
 const string ARG_CALC_BALANCE      = "-cb";
 const string ARG_CALC_PAYMENT      = "-cp";
 const string ARG_CALC_NUMPAYMENTS  = "-cn";
@@ -39,6 +41,11 @@ const string ARG_INTEREST          = "-i";
 const string ARG_OPENFEE           = "-of";
 const string ARG_OPENPERCENT       = "-op";
 
+/// Set up command line options
+/**
+ * @brief Initializes the command line parser with all options
+ * @param clp Reference to the CmdLineParser object
+ */
 void loadCmdLine(CmdLineParser &clp)
 {
   clp.setMainHelpText("A simple loan calculator");
@@ -81,6 +88,14 @@ void loadCmdLine(CmdLineParser &clp)
 //
 // Simple Command line parser
 //
+/**
+ * @brief Reads command line arguments and sets values in the calculator
+ * @param argc Argument count
+ * @param argv Argument values
+ * @param clp Command line parser object
+ * @param calculator LoanCalculator object
+ * @return Type of calculation to perform (CALC_TYPE)
+ */
 CALC_TYPE parseCommandLine(int argc, char **argv, CmdLineParser &clp, LoanCalculator &calculator)
 {
   CALC_TYPE ct(CALC_UNKNOWN);
@@ -91,6 +106,7 @@ CALC_TYPE parseCommandLine(int argc, char **argv, CmdLineParser &clp, LoanCalcul
     return ct;
   }
 
+  // Set all calculator values from command line options
   calculator.setAmount(
        ((CmdLineOptionInt*)   clp.getCmdLineOption(ARG_AMOUNT))->getValue());
   calculator.setInitialPayment(
@@ -109,7 +125,7 @@ CALC_TYPE parseCommandLine(int argc, char **argv, CmdLineParser &clp, LoanCalcul
        ((CmdLineOptionFloat*) clp.getCmdLineOption(ARG_OPENPERCENT))->getValue());
 
   CmdLineOption *option(clp.getMutExclOption());
-  if(option != NULL) // cant be NULL, else the parser mutExcl checking didnt work
+  if(option != NULL) ///< If a calculation option was selected
   {
     ct = (CALC_TYPE) ((CmdLineOptionFlag*) option)->getValueKey();
   }
@@ -120,9 +136,16 @@ CALC_TYPE parseCommandLine(int argc, char **argv, CmdLineParser &clp, LoanCalcul
 //
 // Main program
 //
+/**
+ * @brief Main function - program starts here
+ * @param argc Number of command line arguments
+ * @param argv Command line arguments
+ * @return Exit code
+ */
 int main(int argc, char **argv)
 {
   LoanCalculator calculator;
+  loadConfig(calculator);
 
   // If no arguments are given, then launch the GUI
   if(argc == 1)
@@ -142,62 +165,79 @@ int main(int argc, char **argv)
   loadCmdLine(clp);
   CALC_TYPE ct = parseCommandLine(argc, argv, clp, calculator);
 
+  // Validation/checks
+  if (calculator.getAmount() <= 0) {
+      std::cout << "Error! Loan amount can't be negative\n";
+      return 1;
+  }
+  if (calculator.getInterest() <= 0) {
+      std::cout << "Error! Interest rate can't be negative\n";
+      return 1;
+  }
+  if (calculator.getPeriodTotal() <= 0) {
+      std::cout << "Error! Total loan period must be positive\n";
+      return 1;
+  }
+  if (calculator.getPeriodElapsed() < 0) {
+      std::cout << "Error! Elapsed period cant be negative\n";
+      return 1;
+  }  
+
   try
   {
-    cout << endl;
+    std::cout << "\n";
 
-    // Not sure why I had to cast the result to float, but otherwise it printed strange results
+    // Perform calculation based on selected type
     if(ct == CALC_BALANCE)
     {
-        cout << "Loan Balance = " << (float) calculator.calculateLoanBalance() << endl;
+        std::cout << "Loan Balance = " << (float) calculator.calculateLoanBalance() << "\n";
     }
     else if(ct == CALC_PAYMENT)
     {
       float payment = calculator.calculatePayment();
-      cout << "Monthly Payment    = " << payment << "\n"
+      std::cout << "Monthly Payment    = " << payment << "\n"
            << "Total amt paid     = " << (float) (payment*calculator.getPeriodTotal())
-           << endl;
+           << "\n";
 
       if(calculator.getOpeningPercent() != 0.0 || calculator.getOpeningFee() != 0.0)
       {
-        cout << "Interest with fees = "
+        std::cout << "Interest with fees = "
              << (float) calculator.calculateEffectiveInterestRate()
              << "%"
-             << endl;
+             << "\n";
       }
     }
     else if(ct == CALC_NUMPAYMENTS)
     {
-      cout << "Number of payments = " << (float) calculator.calculateNumberPayments() << endl;
+      std::cout << "Number of payments = " << (float) calculator.calculateNumberPayments() << "\n";
     }
     else if(ct == CALC_AMOUNT)
     {
-      cout << "Initial Loan amount = " << (float) calculator.calculateLoanAmount() << endl;
+      std::cout << "Initial Loan amount = " << (float) calculator.calculateLoanAmount() << "\n";
     }
     else if(ct == CALC_INTEREST)
     {
-      cout << "Yearly Interest Rate = " << (float) calculator.calculateInterestRate() << "%" << endl;
+      std::cout << "Yearly Interest Rate = " << (float) calculator.calculateInterestRate() << "%\n";
     }
     else if(ct == CALC_UNKNOWN)
     {
-      // most likely the case that help was selected
+      // Most likely help was requested
       return 1;
     }
     else
     {
-      cerr << "Unrecognized calculation type, exiting" << endl;
+      std::cerr << "Unrecognized calculation type, exiting\n";
       return 0;
     }
 
-    // print the values set on the calculator
-    cout << calculator.toString() << endl;
+    // Print all values set in the calculator
+    std::cout << calculator.toString() << "\n";
   }
   catch(const exception &e)
   {
-    cerr << "Error executing loan calculator: " << + e.what() << endl;
-    //printUsage();
-    //return 0;
+    std::cerr << "Error executing loan calculator: " << + e.what() << "\n";
   }
 
-  cout << endl;
+  std::cout << "\n";
+  return 0; 
 }
